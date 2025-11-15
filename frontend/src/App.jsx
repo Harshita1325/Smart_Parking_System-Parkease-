@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard';
 import BookSlot from './pages/BookSlot';
 import Payment from './pages/Payment';
 import Receipt from './pages/Receipt';
+import MyBookings from './pages/MyBookings';
 import './App.css';
 
 function App() {
@@ -18,6 +19,7 @@ function App() {
           <Route path="/signup" element={<Signup />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/book-slot" element={<BookSlot />} />
+          <Route path="/my-bookings" element={<MyBookings />} />
           <Route path="/payment" element={<Payment />} />
           <Route path="/receipt" element={<Receipt />} />
         </Routes>

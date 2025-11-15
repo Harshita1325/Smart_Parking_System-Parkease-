@@ -4,6 +4,7 @@ const {
   getSlotsByLocation,
   getAvailableSlots,
   getFloorsByLocation,
+  getFloorDetails,
   getSlotById,
   createSlot,
   createBulkSlots,
@@ -17,6 +18,7 @@ const { protect } = require('../middleware/authMiddleware');
 router.get('/location/:locationId', getSlotsByLocation);
 router.get('/location/:locationId/available', getAvailableSlots);
 router.get('/location/:locationId/floors', getFloorsByLocation);
+router.get('/location/:locationId/floor/:floorName', getFloorDetails);
 router.get('/:id', getSlotById);
 
 // Protected routes (can be admin-only with additional middleware)

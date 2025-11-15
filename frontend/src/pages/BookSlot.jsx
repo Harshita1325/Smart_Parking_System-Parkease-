@@ -5,13 +5,16 @@ import '../App.css';
 
 const BookSlot = () => {
   const [locationData, setLocationData] = useState(null);
-  const [slots, setSlots] = useState([]);
+  const [floors, setFloors] = useState([]);
+  const [selectedFloor, setSelectedFloor] = useState(null);
+  const [floorDetails, setFloorDetails] = useState(null);
   const [vehicleType, setVehicleType] = useState('car');
   const [vehicleNumber, setVehicleNumber] = useState('');
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedTime, setSelectedTime] = useState('09:00');
   const [duration, setDuration] = useState(1);
   const [selectedSlot, setSelectedSlot] = useState(null);
+  const [showFloors, setShowFloors] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const navigate = useNavigate();
@@ -33,10 +36,6 @@ const BookSlot = () => {
         // Fetch location details
         const locationResponse = await api.get(`/locations/${locationId}`);
         setLocationData(locationResponse.data.data);
-
-        // Fetch available slots
-        const slotsResponse = await api.get(`/slots/location/${locationId}/available?vehicleType=${vehicleType}`);
-        setSlots(slotsResponse.data.data);
       } catch (err) {
         setError('Failed to load data. Please try again.');
       } finally {
@@ -45,10 +44,45 @@ const BookSlot = () => {
     };
 
     fetchData();
-  }, [locationId, vehicleType]);
+  }, [locationId]);
+
+  const handleFloorSelect = async (floor) => {
+    setSelectedFloor(floor);
+    setSelectedSlot(null);
+    try {
+      const response = await api.get(`/slots/location/${locationId}/floor/${floor}`);
+      setFloorDetails(response.data);
+    } catch (err) {
+      setError('Failed to load floor details. Please try again.');
+    }
+  };
+
+  const handleProceedToSelectSlot = async () => {
+    // Validate all required fields
+    if (!vehicleNumber) {
+      alert('Please enter your vehicle number');
+      return;
+    }
+    if (!selectedDate) {
+      alert('Please select a date');
+      return;
+    }
+
+    // Fetch floors when user clicks proceed
+    try {
+      const floorsResponse = await api.get(`/slots/location/${locationId}/floors`);
+      setFloors(floorsResponse.data.data);
+      setShowFloors(true);
+    } catch (err) {
+      setError('Failed to load floors. Please try again.');
+    }
+  };
 
   const handleSlotSelect = (slot) => {
-    setSelectedSlot(slot);
+    // Only allow selection of available slots matching vehicle type
+    if (slot.isAvailable && slot.vehicleType === vehicleType) {
+      setSelectedSlot(slot);
+    }
   };
 
   const handleBookSlot = () => {
@@ -88,6 +122,27 @@ const BookSlot = () => {
     return slots;
   };
 
+  const getSlotClassName = (slot) => {
+    let className = 'parking-slot';
+    
+    if (!slot.isAvailable) {
+      className += ' booked';
+    } else if (slot.vehicleType !== vehicleType) {
+      className += ' different-vehicle';
+    } else if (selectedSlot?._id === slot._id) {
+      className += ' selected';
+    } else {
+      className += ' available';
+    }
+    
+    if (slot.isHandicapped) className += ' handicapped';
+    if (slot.isNearEntrance) className += ' near-entrance';
+    if (slot.isNearExit) className += ' near-exit';
+    if (slot.isPremium) className += ' premium';
+    
+    return className;
+  };
+
   if (loading) {
     return <div className="loading">Loading slots...</div>;
   }
@@ -117,7 +172,11 @@ const BookSlot = () => {
               <label>Vehicle Type:</label>
               <select 
                 value={vehicleType} 
-                onChange={(e) => setVehicleType(e.target.value)}
+                onChange={(e) => {
+                  setVehicleType(e.target.value);
+                  setSelectedSlot(null);
+                }}
+                disabled={showFloors}
               >
                 <option value="car">Car</option>
                 <option value="bike">Bike</option>
@@ -131,6 +190,7 @@ const BookSlot = () => {
                 value={vehicleNumber}
                 onChange={(e) => setVehicleNumber(e.target.value.toUpperCase())}
                 placeholder="TN01AB1234"
+                disabled={showFloors}
               />
             </div>
           </div>
@@ -143,6 +203,7 @@ const BookSlot = () => {
                 value={selectedDate}
                 onChange={(e) => setSelectedDate(e.target.value)}
                 min={new Date().toISOString().split('T')[0]}
+                disabled={showFloors}
               />
             </div>
             
@@ -151,6 +212,7 @@ const BookSlot = () => {
               <select 
                 value={selectedTime} 
                 onChange={(e) => setSelectedTime(e.target.value)}
+                disabled={showFloors}
               >
                 {generateTimeSlots().map((time) => (
                   <option key={time} value={time}>{time}</option>
@@ -163,6 +225,7 @@ const BookSlot = () => {
               <select 
                 value={duration} 
                 onChange={(e) => setDuration(Number(e.target.value))}
+                disabled={showFloors}
               >
                 {[1, 2, 3, 4, 5, 6, 7, 8].map((hrs) => (
                   <option key={hrs} value={hrs}>{hrs} hour{hrs > 1 ? 's' : ''}</option>
@@ -170,28 +233,142 @@ const BookSlot = () => {
               </select>
             </div>
           </div>
+
+          {!showFloors && (
+            <button onClick={handleProceedToSelectSlot} className="proceed-button" style={{marginTop: '1rem'}}>
+              Proceed to Select Slot 🚗
+            </button>
+          )}
+
+          {showFloors && (
+            <button 
+              onClick={() => {
+                setShowFloors(false);
+                setSelectedFloor(null);
+                setFloorDetails(null);
+                setSelectedSlot(null);
+              }} 
+              className="back-button-small" 
+              style={{marginTop: '1rem'}}
+            >
+              ← Change Booking Details
+            </button>
+          )}
         </div>
 
-        <div className="slots-section">
-          <h3>Available Slots</h3>
-          {slots.length === 0 ? (
-            <p>No available slots for the selected vehicle type.</p>
-          ) : (
-            <div className="slots-grid">
-              {slots.map((slot) => (
+        {showFloors && !selectedFloor && floors.length > 0 && (
+          <div className="floors-section">
+            <h3>Select Floor</h3>
+            <div className="floors-grid">
+              {floors.map((floor) => (
                 <div 
-                  key={slot._id} 
-                  className={`slot-card ${selectedSlot?._id === slot._id ? 'selected' : ''}`}
-                  onClick={() => handleSlotSelect(slot)}
+                  key={floor} 
+                  className="floor-card"
+                  onClick={() => handleFloorSelect(floor)}
                 >
-                  <h4>{slot.slotNumber}</h4>
-                  <p>Floor: {slot.floor}</p>
-                  <p>Price: ₹{slot.pricePerHour}/hr</p>
+                  <h4>{floor}</h4>
+                  <p>Click to view slots</p>
                 </div>
               ))}
             </div>
-          )}
-        </div>
+          </div>
+        )}
+
+        {showFloors && selectedFloor && floorDetails && (
+          <div className="floor-details-section">
+            <div className="floor-header">
+              <button 
+                className="back-button-small" 
+                onClick={() => {
+                  setSelectedFloor(null);
+                  setFloorDetails(null);
+                  setSelectedSlot(null);
+                }}
+              >
+                ← Back to Floors
+              </button>
+              <h3>{selectedFloor}</h3>
+            </div>
+
+            <div className="floor-stats">
+              <div className="stat-item">
+                <span className="stat-label">Total:</span>
+                <span className="stat-value">{floorDetails.stats.total}</span>
+              </div>
+              <div className="stat-item">
+                <span className="stat-label">Available:</span>
+                <span className="stat-value available">{floorDetails.stats.available}</span>
+              </div>
+              <div className="stat-item">
+                <span className="stat-label">Booked:</span>
+                <span className="stat-value booked">{floorDetails.stats.booked}</span>
+              </div>
+              <div className="stat-item">
+                <span className="stat-label">Handicapped:</span>
+                <span className="stat-value">{floorDetails.stats.handicapped}</span>
+              </div>
+            </div>
+
+            <div className="legend">
+              <h4>Legend:</h4>
+              <div className="legend-items">
+                <div className="legend-item">
+                  <span className="legend-box available"></span>
+                  <span>Available</span>
+                </div>
+                <div className="legend-item">
+                  <span className="legend-box booked"></span>
+                  <span>Booked</span>
+                </div>
+                <div className="legend-item">
+                  <span className="legend-box handicapped"></span>
+                  <span>Handicapped</span>
+                </div>
+                <div className="legend-item">
+                  <span className="legend-box near-entrance"></span>
+                  <span>Near Entrance</span>
+                </div>
+                <div className="legend-item">
+                  <span className="legend-box near-exit"></span>
+                  <span>Near Exit</span>
+                </div>
+                <div className="legend-item">
+                  <span className="legend-box premium"></span>
+                  <span>Premium</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="parking-layout">
+              {floorDetails.rows.map((row) => (
+                <div key={row} className="parking-row">
+                  <div className="row-label">{row}</div>
+                  <div className="slots-horizontal">
+                    {floorDetails.slotsByRow[row].map((slot) => (
+                      <div
+                        key={slot._id}
+                        className={getSlotClassName(slot)}
+                        onClick={() => handleSlotSelect(slot)}
+                        title={`${slot.slotNumber} - ${slot.vehicleType} - ₹${slot.pricePerHour}/hr${slot.isAvailable ? ' - AVAILABLE' : ' - OCCUPIED'}${slot.isHandicapped ? ' - Handicapped' : ''}${slot.isNearEntrance ? ' - Near Entrance' : ''}${slot.isNearExit ? ' - Near Exit' : ''}${slot.isPremium ? ' - Premium' : ''}`}
+                      >
+                        <div className="slot-number">{slot.slotNumber}</div>
+                        <div className="slot-info">
+                          <span className="vehicle-icon">{slot.vehicleType === 'car' ? '🚗' : '🏍️'}</span>
+                          {slot.isHandicapped && <span className="handicap-icon">♿</span>}
+                          {slot.isPremium && <span className="premium-icon">💎</span>}
+                        </div>
+                        <div className="slot-price">₹{slot.pricePerHour}/hr</div>
+                        <div className="slot-status">
+                          {slot.isAvailable ? '✓ Available' : '✗ Occupied'}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {selectedSlot && (
           <div className="booking-summary">

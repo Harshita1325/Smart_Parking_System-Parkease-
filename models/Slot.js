@@ -29,6 +29,16 @@ const slotSchema = new mongoose.Schema({
     type: String,
     default: 'Ground'
   },
+  row: {
+    type: String,
+    required: [true, 'Row is required'],
+    trim: true
+  },
+  position: {
+    type: Number,
+    required: [true, 'Position is required'],
+    min: 1
+  },
   isPremium: {
     type: Boolean,
     default: false

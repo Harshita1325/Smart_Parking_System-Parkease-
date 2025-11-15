@@ -109,6 +109,64 @@ const getFloorsByLocation = async (req, res) => {
   }
 };
 
+// @desc    Get floor details with slot layout
+// @route   GET /api/slots/location/:locationId/floor/:floorName
+// @access  Public
+const getFloorDetails = async (req, res) => {
+  try {
+    const { locationId, floorName } = req.params;
+
+    // Get all slots for this floor
+    const slots = await Slot.find({ locationId, floor: floorName })
+      .populate('locationId', 'name address')
+      .sort({ row: 1, position: 1 });
+
+    if (slots.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'No slots found for this floor'
+      });
+    }
+
+    // Organize slots by row
+    const slotsByRow = {};
+    const rows = [...new Set(slots.map(slot => slot.row))].sort();
+    
+    rows.forEach(row => {
+      slotsByRow[row] = slots.filter(slot => slot.row === row)
+        .sort((a, b) => a.position - b.position);
+    });
+
+    // Calculate statistics
+    const stats = {
+      total: slots.length,
+      available: slots.filter(s => s.isAvailable).length,
+      booked: slots.filter(s => !s.isAvailable).length,
+      handicapped: slots.filter(s => s.isHandicapped).length,
+      nearEntrance: slots.filter(s => s.isNearEntrance).length,
+      nearExit: slots.filter(s => s.isNearExit).length,
+      carSlots: slots.filter(s => s.vehicleType === 'car').length,
+      bikeSlots: slots.filter(s => s.vehicleType === 'bike').length
+    };
+
+    res.json({
+      success: true,
+      floor: floorName,
+      rows: rows,
+      slotsByRow,
+      stats,
+      data: slots
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching floor details',
+      error: error.message
+    });
+  }
+};
+
 // @desc    Get slot by ID
 // @route   GET /api/slots/:id
 // @access  Public
@@ -143,10 +201,10 @@ const getSlotById = async (req, res) => {
 // @access  Private/Admin
 const createSlot = async (req, res) => {
   try {
-    const { locationId, slotNumber, vehicleType, pricePerHour, floor, isPremium, isHandicapped, isNearEntrance, isNearExit, isNearLift } = req.body;
+    const { locationId, slotNumber, vehicleType, pricePerHour, floor, row, position, isPremium, isHandicapped, isNearEntrance, isNearExit, isNearLift } = req.body;
 
     // Validate required fields
-    if (!locationId || !slotNumber || !vehicleType || !pricePerHour) {
+    if (!locationId || !slotNumber || !vehicleType || !pricePerHour || !row || !position) {
       return res.status(400).json({
         success: false,
         message: 'Please provide all required fields'
@@ -177,6 +235,8 @@ const createSlot = async (req, res) => {
       vehicleType,
       pricePerHour,
       floor: floor || 'Ground',
+      row,
+      position,
       isPremium: isPremium || false,
       isHandicapped: isHandicapped || false,
       isNearEntrance: isNearEntrance || false,
@@ -203,10 +263,10 @@ const createSlot = async (req, res) => {
 // @access  Private/Admin
 const createBulkSlots = async (req, res) => {
   try {
-    const { locationId, slotPrefix, startNumber, endNumber, vehicleType, pricePerHour, floor, isPremium, isHandicapped, isNearEntrance, isNearExit, isNearLift } = req.body;
+    const { locationId, slotPrefix, startNumber, endNumber, vehicleType, pricePerHour, floor, row, isPremium, isHandicapped, isNearEntrance, isNearExit, isNearLift } = req.body;
 
     // Validate required fields
-    if (!locationId || !slotPrefix || !startNumber || !endNumber || !vehicleType || !pricePerHour) {
+    if (!locationId || !slotPrefix || !startNumber || !endNumber || !vehicleType || !pricePerHour || !row) {
       return res.status(400).json({
         success: false,
         message: 'Please provide all required fields'
@@ -230,6 +290,8 @@ const createBulkSlots = async (req, res) => {
         vehicleType,
         pricePerHour,
         floor: floor || 'Ground',
+        row,
+        position: i,
         isPremium: isPremium || false,
         isHandicapped: isHandicapped || false,
         isNearEntrance: isNearEntrance || false,
@@ -367,6 +429,7 @@ module.exports = {
   getSlotsByLocation,
   getAvailableSlots,
   getFloorsByLocation,
+  getFloorDetails,
   getSlotById,
   createSlot,
   createBulkSlots,
